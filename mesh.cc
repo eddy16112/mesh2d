@@ -64,7 +64,7 @@ double get_cur_time() {
   return cur_time;
 } 
 
-//#define OUTPUT_DP
+#define OUTPUT_DP
 
 double ts_start_dp;
 int root = 0;
@@ -77,6 +77,7 @@ void top_level_task(const Task *task,
   int num_rows = 4;
   int num_rows_partition = 2;
   int have_task = 0;
+  int use_image = 1;
   
   // See if we have any command line arguments to parse
   {
@@ -89,6 +90,8 @@ void top_level_task(const Task *task,
         num_rows_partition = atoi(command_args.argv[++i]);
       if (!strcmp(command_args.argv[i],"-ht"))
         have_task = atoi(command_args.argv[++i]);
+      if (!strcmp(command_args.argv[i],"-ui"))
+        use_image = atoi(command_args.argv[++i]);
     }
   }
   int num_cells = num_rows * num_rows;
@@ -321,30 +324,33 @@ void top_level_task(const Task *task,
   
   IndexPartition ghost_ip = runtime->create_partition_by_difference(ctx, all_cells_lr.get_index_space(),
                                                            reachable_ip, owned_ip, partition_is);  
-                                                           
-  IndexPartition ghost_preimage_ip = runtime->create_partition_by_preimage(ctx, ghost_ip , 
-                                                                     all_cells_to_cells_lr, all_cells_to_cells_lr,
-                                                                     FID_CELL_TO_CELL_PTR,
-                                                                     partition_is);
+  
+  IndexPartition ghost_preimage_ip;
+  IndexPartition ghost_preimage_preimage_nrange_ip;
+  if (!use_image) {
+    ghost_preimage_ip = runtime->create_partition_by_preimage(ctx, ghost_ip , 
+                                                                       all_cells_to_cells_lr, all_cells_to_cells_lr,
+                                                                       FID_CELL_TO_CELL_PTR,
+                                                                       partition_is);
                                                                      
-  IndexPartition ghost_preimage_preimage_nrange_ip = runtime->create_partition_by_preimage_range(ctx, ghost_preimage_ip , 
-                                                                    all_cells_lr, all_cells_lr,
-                                                                    FID_CELL_CELL_NRANGE,
-                                                                    partition_is);
- 
-                                                           /*
-  IndexPartition ghost_preimage_ip = runtime->create_partition_by_image_range(ctx, all_cells_to_cells_lr.get_index_space(),
-                                                                               runtime->get_logical_partition(all_cells_lr, ghost_ip), 
-                                                                               all_cells_lr,
-                                                                               FID_CELL_CELL_NRANGE,
-                                                                               partition_is);
+    ghost_preimage_preimage_nrange_ip = runtime->create_partition_by_preimage_range(ctx, ghost_preimage_ip , 
+                                                                      all_cells_lr, all_cells_lr,
+                                                                      FID_CELL_CELL_NRANGE,
+                                                                      partition_is);
+  } else {
+                                                           
+    ghost_preimage_ip = runtime->create_partition_by_image_range(ctx, all_cells_to_cells_lr.get_index_space(),
+                                                                                 runtime->get_logical_partition(all_cells_lr, ghost_ip), 
+                                                                                 all_cells_lr,
+                                                                                 FID_CELL_CELL_NRANGE,
+                                                                                 partition_is);
 
-  IndexPartition ghost_preimage_preimage_nrange_ip = runtime->create_partition_by_image(ctx, all_cells_lr.get_index_space(),
-                                                                  runtime->get_logical_partition(all_cells_to_cells_lr, ghost_preimage_ip), 
-                                                                  all_cells_to_cells_lr,
-                                                                  FID_CELL_TO_CELL_PTR,
-                                                                  partition_is);      
-                                                             */                                                                                                                        
+    ghost_preimage_preimage_nrange_ip = runtime->create_partition_by_image(ctx, all_cells_lr.get_index_space(),
+                                                                    runtime->get_logical_partition(all_cells_to_cells_lr, ghost_preimage_ip), 
+                                                                    all_cells_to_cells_lr,
+                                                                    FID_CELL_TO_CELL_PTR,
+                                                                    partition_is);      
+  }                                                                                                                                                                                   
   IndexPartition shared_ip = runtime->create_partition_by_intersection(ctx, all_cells_lr.get_index_space(),
                                                            ghost_preimage_preimage_nrange_ip, owned_ip, partition_is);  
   runtime->attach_name(shared_ip, "shared_ip");
