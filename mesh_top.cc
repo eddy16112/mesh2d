@@ -495,14 +495,15 @@ void top_level_task(const Task *task,
   printf("ELAPSED TIME = %7.3f s\n", sim_time);
   }
   
-
- LogicalPartition ghost_preimage_lp = runtime->get_logical_partition(ctx, all_cells_to_cells_lr, ghost_preimage_ip);
- IndexLauncher test_range_launcher(TEST_RANGE_TASK_ID, partition_is, TaskArgument(NULL, 0), arg_map);
- test_range_launcher.add_region_requirement(
-       RegionRequirement(ghost_preimage_lp, 0/*projection ID*/,
+  /*
+  LogicalPartition ghost_preimage_lp = runtime->get_logical_partition(ctx, all_cells_to_cells_lr, ghost_preimage_ip);
+  IndexLauncher test_range_launcher(TEST_RANGE_TASK_ID, partition_is, TaskArgument(NULL, 0), arg_map);
+  test_range_launcher.add_region_requirement(
+       RegionRequirement(ghost_preimage_lp, 0,
                          READ_ONLY, EXCLUSIVE, all_cells_to_cells_lr));
- test_range_launcher.region_requirements[0].add_field(FID_CELL_TO_CELL_ID);
-   runtime->execute_index_space(ctx, test_range_launcher);
+  test_range_launcher.region_requirements[0].add_field(FID_CELL_TO_CELL_ID);
+  runtime->execute_index_space(ctx, test_range_launcher);
+  */
 
   runtime->destroy_logical_region(ctx, all_cells_lr);
   runtime->destroy_logical_region(ctx, all_vertices_lr);
@@ -549,13 +550,13 @@ void test_task(const Task *task,
   for (PointInDomainIterator<1> pir(domain_ghost); pir(); pir++)
     printf("ghost Partition %d, cell id %d\n", point, cells_id_ghost_acc[*pir]);
 	
-  printf("ghost preimage_2 at point %d...\n", point);
+  printf("ghost preimage/image *2 at point %d...\n", point);
   const AccessorROint cells_id_ghost_preimage_acc(regions[3], FID_CELL_ID);
   
   Domain domain_ghost_preimage = runtime->get_index_space_domain(ctx,
                   task->regions[8].region.get_index_space());
   for (PointInDomainIterator<1> pir(domain_ghost_preimage); pir(); pir++)
-    printf("ghost preimage*2 Partition %d, cell id %d\n", point, cells_id_ghost_preimage_acc[*pir]);
+    printf("ghost preimage/image *2 Partition %d, cell id %d\n", point, cells_id_ghost_preimage_acc[*pir]);
   
   printf("Shared at point %d...\n", point);
   const AccessorROint cells_id_shared_acc(regions[3], FID_CELL_ID);

@@ -27,9 +27,9 @@ USE_HDF         ?= 0		# Include HDF5 support (requires HDF5)
 ALT_MAPPERS     ?= 0		# Include alternative mappers (not recommended)
 
 # Put the binary file name here
-OUTFILE		?= mesh 
+OUTFILE		?= mesh_idx 
 # List all the application source files here
-GEN_SRC		?= mesh.cc		# .cc files
+GEN_SRC		?= mesh_idx.cc		# .cc files
 GEN_GPU_SRC	?=				# .cu files
 
 # You can modify these variables, some will be appended to by the runtime makefile
@@ -37,8 +37,8 @@ INC_FLAGS	?=
 CC_FLAGS	?=
 NVCC_FLAGS	?=
 GASNET_FLAGS	?=
-LD_FLAGS	?=
-LEGION_LD_FLAGS        ?= 
+#LD_FLAGS	?= -lpmi2
+#LEGION_LD_FLAGS        ?= -lpmi2
 
 ###########################################################################
 #

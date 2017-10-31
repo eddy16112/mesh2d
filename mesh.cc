@@ -159,6 +159,29 @@ void top_level_task(const Task *task,
   LogicalRegion all_vertices_lr = runtime->create_logical_region(ctx,vertices_index_space,vertices_field_space);
   runtime->attach_name(all_vertices_lr, "all_vertices_lr");
   
+  // region requirement
+  /*
+  RegionRequirement cells_rr(all_cells_lr, READ_WRITE, EXCLUSIVE, all_cells_lr);
+  cells_rr.add_field(FID_CELL_ID);
+  cells_rr.add_field(FID_CELL_PARTITION_COLOR);
+  cells_rr.add_field(FID_CELL_CELL_NRANGE);
+  cells_rr.add_field(FID_CELL_VERTEX_NRANGE);
+  
+  RegionRequirement cells_to_cells_rr(all_cells_to_cells_lr, READ_WRITE, EXCLUSIVE, all_cells_to_cells_lr);
+  cells_to_cells_rr.add_field(FID_CELL_TO_CELL_ID);
+  cells_to_cells_rr.add_field(FID_CELL_TO_CELL_PTR);
+  
+  PhysicalRegion cells_pr = runtime->map_region(ctx, cells_rr);
+  cells_pr.wait_until_valid();
+  
+  PhysicalRegion cells_to_cells_pr = runtime->map_region(ctx, cells_to_cells_rr);
+  cells_to_cells_pr.wait_until_valid();
+  
+  const AccessorRWint cells_to_cells_id_acc(cells_to_cells_pr, FID_CELL_TO_CELL_ID);
+  Rect<1> rect_cell2cell = runtime->get_index_space_domain(ctx, cells_to_cells_index_space);
+  int *cells_to_cells_id_ptr = cells_to_cells_id_acc.ptr(rect_cell2cell.lo);
+  printf("ptr %p", cells_to_cells_id_ptr);  */
+  
   IndexSpace partition_is = runtime->create_index_space(ctx, Rect<1>(0, num_partitions-1));
   
   IndexPartition cell_equal_ip = 
@@ -319,15 +342,16 @@ void top_level_task(const Task *task,
   printf("ELAPSED TIME = %7.3f s\n", sim_time);
   }
   
-  
- ArgumentMap arg_map;
-   LogicalPartition ghost_preimage_lp = runtime->get_logical_partition(ctx, all_cells_to_cells_lr, ghost_preimage_ip);
-   IndexLauncher test_range_launcher(TEST_RANGE_TASK_ID, partition_is, TaskArgument(NULL, 0), arg_map);
-   test_range_launcher.add_region_requirement(
-         RegionRequirement(ghost_preimage_lp, 0/*projection ID*/,
-                           READ_ONLY, EXCLUSIVE, all_cells_to_cells_lr));
-   test_range_launcher.region_requirements[0].add_field(FID_CELL_TO_CELL_ID);
-     runtime->execute_index_space(ctx, test_range_launcher);
+  /*
+  ArgumentMap arg_map;
+  LogicalPartition ghost_preimage_lp = runtime->get_logical_partition(ctx, all_cells_to_cells_lr, ghost_preimage_ip);
+  IndexLauncher test_range_launcher(TEST_RANGE_TASK_ID, partition_is, TaskArgument(NULL, 0), arg_map);
+  test_range_launcher.add_region_requirement(
+       RegionRequirement(ghost_preimage_lp, 0,
+                         READ_ONLY, EXCLUSIVE, all_cells_to_cells_lr));
+  test_range_launcher.region_requirements[0].add_field(FID_CELL_TO_CELL_ID);
+  runtime->execute_index_space(ctx, test_range_launcher);
+  */
 
   runtime->destroy_logical_region(ctx, all_cells_lr);
   runtime->destroy_logical_region(ctx, all_vertices_lr);
@@ -355,8 +379,8 @@ void init_task(const Task *task,
   int num_cells_per_partition = num_rows_per_partition * num_rows_per_partition;
   
   
-  printf("\n-----------Running init for point %d, rows_per_partition %d, rows %d, rows_partition %d, host %s -----------\n", 
-        point, num_rows_per_partition, num_rows, num_rows_partition, hostname);
+//  printf("\n-----------Running init for point %d, rows_per_partition %d, rows %d, rows_partition %d, host %s -----------\n", 
+  //      point, num_rows_per_partition, num_rows, num_rows_partition, hostname);
   
   // owned 
   const AccessorRWint cells_id_acc(regions[0], FID_CELL_ID);
@@ -365,7 +389,7 @@ void init_task(const Task *task,
   
   const AccessorRWint cells_to_cells_id_acc(regions[1], FID_CELL_TO_CELL_ID);
   const AccessorRWpoint cells_to_cells_ptr_acc(regions[1], FID_CELL_TO_CELL_PTR);
-  printf("Owned at point %d...\n", point);
+//  printf("Owned at point %d...\n", point);
   Domain domain_owned = runtime->get_index_space_domain(ctx,
                   task->regions[0].region.get_index_space());
                   
@@ -376,6 +400,7 @@ void init_task(const Task *task,
   int ct= 0;
   int partition_x_idx = point % num_rows_partition;
   int partition_y_idx = point / num_rows_partition;
+  //printf("%p \n", cells_to_cells_id_ptr);
   
   for (PointInDomainIterator<1> pir(domain_owned); pir(); pir++) {
     
@@ -432,7 +457,7 @@ void init_task(const Task *task,
     }
     
     ct ++;
-    printf("init Partition %d, cell id %d, partition color %lld\n", point, cells_id_acc[*pir], cells_color_acc[*pir].x);
+ //   printf("init Partition %d, cell id %d, partition color %lld\n", point, cells_id_acc[*pir], cells_color_acc[*pir].x);
   }
   
   ct = 0;
@@ -442,11 +467,11 @@ void init_task(const Task *task,
     cells_to_cells_ptr_acc[*pir] = Point<1>(cells_to_cells_id_acc[*pir]); 
     //printf("cell id %d, neighbor %d\n", cell_id, cells_to_cells_ptr_acc[*pir]);
 		if (ct % 8 == 0) {
-			printf("cell id %d, cell2cell neighbors:", cell_id);
+	//		printf("cell id %d, cell2cell neighbors:", cell_id);
 		}
-		printf("%d ", cells_to_cells_id_acc[*pir]);
+	//	printf("%d ", cells_to_cells_id_acc[*pir]);
 		if (ct % 8 == 7) {
-			printf("\n");
+//			printf("\n");
 		}
 		ct ++;
   }
@@ -490,13 +515,13 @@ void test_task(const Task *task,
   for (PointInDomainIterator<1> pir(domain_ghost); pir(); pir++)
     printf("ghost Partition %d, cell id %d\n", point, cells_id_ghost_acc[*pir]);
   
-  printf("ghost preimage*2 at point %d...\n", point);
+  printf("ghost preimage/image *2 at point %d...\n", point);
   const AccessorROint cells_id_ghost_preimage_acc(regions[5], FID_CELL_ID);
   
   Domain domain_ghost_preimage = runtime->get_index_space_domain(ctx,
                   task->regions[5].region.get_index_space());
   for (PointInDomainIterator<1> pir(domain_ghost_preimage); pir(); pir++)
-    printf("ghost preimage*2 Partition %d, cell id %d\n", point, cells_id_ghost_preimage_acc[*pir]);
+    printf("ghost preimage/image *2 Partition %d, cell id %d\n", point, cells_id_ghost_preimage_acc[*pir]);
 	
   printf("Shared at point %d...\n", point);
   const AccessorROint cells_id_shared_acc(regions[3], FID_CELL_ID);
