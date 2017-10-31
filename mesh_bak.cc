@@ -83,6 +83,7 @@ void top_level_task(const Task *task,
   int num_rows = 4;
   int num_rows_partition = 2;
   int have_task = 0;
+  int use_image = 1;
   
   // See if we have any command line arguments to parse
   {
@@ -214,7 +215,42 @@ void top_level_task(const Task *task,
   runtime->attach_name(reachable_ip, "reachable_ip"); 
   
   IndexPartition ghost_ip = runtime->create_partition_by_difference(ctx, all_cells_lr.get_index_space(),
-                                                            reachable_ip, owned_ip, partition_is);  
+                                                             reachable_ip, owned_ip, partition_is);  
+  
+    IndexPartition ghost_preimage_ip;
+    IndexPartition ghost_preimage_preimage_nrange_ip;
+    if (!use_image) {
+      ghost_preimage_ip = runtime->create_partition_by_preimage(ctx, ghost_ip , 
+                                                                         all_cells_to_cells_lr, all_cells_to_cells_lr,
+                                                                         FID_CELL_TO_CELL_PTR,
+                                                                         partition_is);
+                                                                     
+      ghost_preimage_preimage_nrange_ip = runtime->create_partition_by_preimage_range(ctx, ghost_preimage_ip , 
+                                                                        all_cells_lr, all_cells_lr,
+                                                                        FID_CELL_CELL_NRANGE,
+                                                                        partition_is);
+    } else {
+                                                           
+      ghost_preimage_ip = runtime->create_partition_by_image_range(ctx, all_cells_to_cells_lr.get_index_space(),
+                                                                                   runtime->get_logical_partition(all_cells_lr, ghost_ip), 
+                                                                                   all_cells_lr,
+                                                                                   FID_CELL_CELL_NRANGE,
+                                                                                   partition_is);
+
+      ghost_preimage_preimage_nrange_ip = runtime->create_partition_by_image(ctx, all_cells_lr.get_index_space(),
+                                                                      runtime->get_logical_partition(all_cells_to_cells_lr, ghost_preimage_ip), 
+                                                                      all_cells_to_cells_lr,
+                                                                      FID_CELL_TO_CELL_PTR,
+                                                                      partition_is);      
+    }
+  IndexPartition shared_ip = runtime->create_partition_by_intersection(ctx, all_cells_lr.get_index_space(),
+                                                           ghost_preimage_preimage_nrange_ip, owned_ip, partition_is);  
+  runtime->attach_name(shared_ip, "shared_ip");
+
+  IndexPartition private_ip = runtime->create_partition_by_difference(ctx, all_cells_lr.get_index_space(),
+                                                           owned_ip, shared_ip, partition_is); 
+  runtime->attach_name(private_ip, "private_ip");   
+  
   // get lp
   LogicalPartition owned_lp = runtime->get_logical_partition(ctx, all_cells_lr, owned_ip);
   runtime->attach_name(owned_lp, "owned_lp");
@@ -222,6 +258,10 @@ void top_level_task(const Task *task,
   runtime->attach_name(reachable_lp, "reachable_lp");
   LogicalPartition ghost_lp = runtime->get_logical_partition(ctx, all_cells_lr, ghost_ip);
   runtime->attach_name(ghost_lp, "ghost_lp");
+  LogicalPartition shared_lp = runtime->get_logical_partition(ctx, all_cells_lr, shared_ip);
+  runtime->attach_name(shared_lp, "shared_lp");
+  LogicalPartition private_lp = runtime->get_logical_partition(ctx, all_cells_lr, private_ip);
+  runtime->attach_name(private_lp, "private_lp");
     
   runtime->issue_execution_fence(ctx);
   //Future f_end = runtime->get_current_time_in_microseconds(ctx);
@@ -247,9 +287,19 @@ void top_level_task(const Task *task,
   test_launcher.region_requirements[1].add_field(FID_CELL_ID);
   
   test_launcher.add_region_requirement(
-          RegionRequirement(ghost_lp, 0/*projection ID*/,
-                            READ_ONLY, EXCLUSIVE, all_cells_lr));
+        RegionRequirement(ghost_lp, 0/*projection ID*/,
+                          READ_ONLY, EXCLUSIVE, all_cells_lr));
   test_launcher.region_requirements[2].add_field(FID_CELL_ID);
+  
+  test_launcher.add_region_requirement(
+        RegionRequirement(shared_lp, 0/*projection ID*/,
+                          READ_ONLY, EXCLUSIVE, all_cells_lr));
+  test_launcher.region_requirements[3].add_field(FID_CELL_ID);
+  
+  test_launcher.add_region_requirement(
+        RegionRequirement(private_lp, 0/*projection ID*/,
+                          READ_ONLY, EXCLUSIVE, all_cells_lr));
+  test_launcher.region_requirements[4].add_field(FID_CELL_ID);
   
   FutureMap fm = runtime->execute_index_space(ctx, test_launcher);
   fm.wait_all_results(); 
@@ -266,7 +316,7 @@ ArgumentMap arg_map;
           RegionRequirement(reachable_nrange_lp, 0/*projection ID*/,
                             READ_ONLY, EXCLUSIVE, all_cells_to_cells_lr));
     test_range_launcher.region_requirements[0].add_field(FID_CELL_TO_CELL_ID);
-      runtime->execute_index_space(ctx, test_range_launcher);
+//      runtime->execute_index_space(ctx, test_range_launcher);
 
   runtime->destroy_logical_region(ctx, all_cells_lr);
   runtime->destroy_logical_region(ctx, all_vertices_lr);
@@ -317,16 +367,17 @@ void init_task(const Task *task,
   int partition_y_idx = point / num_rows_partition;
   
   for (PointInDomainIterator<1> pir(domain_owned); pir(); pir++) {
+    int local_x_idx = ct % num_rows_per_partition;
+    int local_y_idx = ct / num_rows_per_partition;
+    int global_x_idx = partition_x_idx * num_rows_per_partition + local_x_idx;
+    int global_y_idx = partition_y_idx * num_rows_per_partition + local_y_idx;
     
-    int cell_id = point * num_cells_per_partition + ct;
-    int y_idx = cell_id / num_rows;
-    int x_idx = cell_id % num_rows;
-    int y_par_idx = y_idx / num_rows_per_partition;
-    int x_par_idx = x_idx / num_rows_per_partition;
-    
+    int cell_id = global_y_idx * num_rows + global_x_idx;
     cells_id_acc[*pir] = cell_id;
-    cells_color_acc[*pir] = y_par_idx * num_rows_partition + x_par_idx;
-    cells_cells_nrange_acc[*pir] = Rect<1>(cell_id*8, cell_id*8+7);
+    cells_color_acc[*pir] = Point<1>(point);
+    
+    int global_ct = point * num_cells_per_partition + ct;
+    cells_cells_nrange_acc[*pir] = Rect<1>(global_ct*8, global_ct*8+7);
     
     
     cells_to_cells_id_ptr[ct*8+0] = cell_id-1;
@@ -371,15 +422,29 @@ void init_task(const Task *task,
     }
     
     ct ++;
-    printf("owned Partition %d, cell id %d, partition color %lld\n", point, cells_id_acc[*pir], cells_color_acc[*pir].x);
+//    printf("owned Partition %d, cell id %d, partition color %lld\n", point, cells_id_acc[*pir], cells_color_acc[*pir].x);
   }
   
   ct = 0;
   for (PointInRectIterator<1> pir(rect_cell2cell); pir(); pir++) {
     int cell_ct = ct / 8;
-    int cell_id = point * num_cells_per_partition + cell_ct;
-    cells_to_cells_ptr_acc[*pir] = Point<1>(cells_to_cells_id_acc[*pir]); 
-    printf("cell id %d, neighbor %d\n", cell_id, cells_to_cells_ptr_acc[*pir]);
+    int local_x_idx = cell_ct % num_rows_per_partition;
+    int local_y_idx = cell_ct / num_rows_per_partition;
+    int global_x_idx = partition_x_idx * num_rows_per_partition + local_x_idx;
+    int global_y_idx = partition_y_idx * num_rows_per_partition + local_y_idx;
+    
+    int cell_id = global_y_idx * num_rows + global_x_idx;
+    int neighbor_id = cells_to_cells_id_acc[*pir];
+    int neighbor_x = neighbor_id % num_rows;
+    int neighbor_y = neighbor_id / num_rows;
+    int neighbor_par_x = neighbor_x / num_rows_per_partition;
+    int neighbor_par_y = neighbor_y / num_rows_per_partition;
+    int par_id = neighbor_par_y * num_rows_partition + neighbor_par_x;
+    int local_x = neighbor_x % num_rows_per_partition;
+    int local_y = neighbor_y % num_rows_per_partition;
+    int local_id = local_y * num_rows_per_partition + local_x;
+    cells_to_cells_ptr_acc[*pir] = Point<1>(par_id * num_cells_per_partition + local_id); 
+ //   printf("cell id %d, neighbor %d, ptr %d\n", cell_id, cells_to_cells_id_acc[*pir], cells_to_cells_ptr_acc[*pir]);
     ct ++;
   }
 }
@@ -388,9 +453,9 @@ void test_task(const Task *task,
                 const std::vector<PhysicalRegion> &regions,
                 Context ctx, Runtime *runtime)
 {
-  assert(regions.size() == 3);
-  assert(task->regions.size() == 3);
-#if defined (OUTPUT_DP)  
+  assert(regions.size() == 5);
+  assert(task->regions.size() == 5);
+#if defined (OUTPUT_DP_1)  
   const int point = task->index_point.point_data[0];
   char hostname[1024];
   hostname[1023] = '\0';
@@ -421,7 +486,7 @@ void test_task(const Task *task,
                   task->regions[2].region.get_index_space());
   for (PointInDomainIterator<1> pir(domain_ghost); pir(); pir++)
     printf("ghost Partition %d, cell id %d\n", point, cells_id_ghost_acc[*pir]);
-  /*
+  
   printf("Shared at point %d...\n", point);
   const AccessorROint cells_id_shared_acc(regions[3], FID_CELL_ID);
   
@@ -437,7 +502,7 @@ void test_task(const Task *task,
                   task->regions[4].region.get_index_space());
   for (PointInDomainIterator<1> pir(domain_private); pir(); pir++)
     printf("private Partition %d, cell id %d\n", point, cells_id_private_acc[*pir]);
-  
+  /*
   printf("Owned vertices at point %d...\n", point);
   const AccessorROint vertices_id_owned_acc(regions[5], FID_VERTEX_ID);
   Domain domain_owned_vertices = runtime->get_index_space_domain(ctx,
