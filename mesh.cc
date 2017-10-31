@@ -440,8 +440,15 @@ void init_task(const Task *task,
     int cell_ct = ct / 8;
     int cell_id = point * num_cells_per_partition + cell_ct;
     cells_to_cells_ptr_acc[*pir] = Point<1>(cells_to_cells_id_acc[*pir]); 
-    printf("cell id %d, neighbor %d\n", cell_id, cells_to_cells_ptr_acc[*pir]);
-    ct ++;
+    //printf("cell id %d, neighbor %d\n", cell_id, cells_to_cells_ptr_acc[*pir]);
+		if (ct % 8 == 0) {
+			printf("cell id %d, cell2cell neighbors:", cell_id);
+		}
+		printf("%d ", cells_to_cells_id_acc[*pir]);
+		if (ct % 8 == 7) {
+			printf("\n");
+		}
+		ct ++;
   }
 }
 

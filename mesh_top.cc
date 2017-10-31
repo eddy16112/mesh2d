@@ -273,16 +273,16 @@ void top_level_task(const Task *task,
     cells_to_vertices_ptr_acc[i*4+1] = Point<1>(cells_to_vertices_id_acc[i*4+1]);
     cells_to_vertices_ptr_acc[i*4+2] = Point<1>(cells_to_vertices_id_acc[i*4+2]);
     cells_to_vertices_ptr_acc[i*4+3] = Point<1>(cells_to_vertices_id_acc[i*4+3]);
-  //  printf("cell %d, color %lld, left %d, right %d, top %d, bottom %d, nrange(%d, %d), cell2cell neighbors: ", cells_id_acc[i], cells_color_acc[i].x, cells_to_cells_id_acc[i*8+0], cells_to_cells_id_acc[i*8+1],
-    //       cells_to_cells_id_acc[i*8+2], cells_to_cells_id_acc[i*8+3], i*8, i*4+7);
+	  printf("cell %d, color %lld, nrange(%d, %d), cell2cell neighbors: ", 
+						cells_id_acc[i], cells_color_acc[i].x, i*8, i*8+7);
     for (j = i*8; j <= i*8+7; j++) {
-    //  printf("%d ", cells_to_cells_id_acc[j]);
+		  printf("%d ", cells_to_cells_id_acc[j]);
     } 
    // printf(" cell2vertex: ");
     for (j = i*4; j <= i*4+3; j++) {
      // printf("%d ", cells_to_vertices_id_acc[j]);
     } 
- //   printf("\n");
+	   printf("\n");
   }
   printf("nb_rows_per_partition %d, num_rows_partition %d", nb_rows_per_partition, num_rows_partition);
   for (i = 0; i < num_vertices; i++) {
