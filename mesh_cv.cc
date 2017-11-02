@@ -71,6 +71,7 @@ typedef struct init_arg_s{
 }init_arg_t;
 
 #define OUTPUT_DP
+#define HAVE_VERTEX
 
 double ts_start_dp;
 int root = 0;
@@ -315,6 +316,7 @@ void top_level_task(const Task *task,
                                                            owned_ip, shared_ip, partition_is); 
   runtime->attach_name(private_ip, "private_ip");
   
+#if defined (HAVE_VERTEX)
   // vertex 
   IndexPartition owned_vertices_ip = runtime->create_partition_by_field(ctx, all_vertices_lr,
                                                                  all_vertices_lr,
@@ -355,6 +357,7 @@ void top_level_task(const Task *task,
   IndexPartition shared_vertices_ip = runtime->create_partition_by_intersection(ctx, all_vertices_lr.get_index_space(),
                                                            shared_cells_vertices_ip, owned_vertices_ip, partition_is); 
   runtime->attach_name(shared_vertices_ip, "shared_vertices_ip");
+#endif
     
   // get lp
   LogicalPartition owned_lp = runtime->get_logical_partition(ctx, all_cells_lr, owned_ip);
@@ -370,14 +373,15 @@ void top_level_task(const Task *task,
 	
   LogicalPartition ghost_preimage_preimage_nrange_lp = runtime->get_logical_partition(ctx, all_cells_lr, ghost_preimage_preimage_nrange_ip);
   runtime->attach_name(ghost_preimage_preimage_nrange_lp, "ghost_preimage_preimage_nrange_ip");
-  
+
+#if defined (HAVE_VERTEX)  
   LogicalPartition owned_vertices_lp = runtime->get_logical_partition(ctx, all_vertices_lr, owned_vertices_ip);
   runtime->attach_name(owned_vertices_lp, "owned_vertices_lp");
   LogicalPartition ghost_vertices_lp = runtime->get_logical_partition(ctx, all_vertices_lr, ghost_vertices_ip);
   runtime->attach_name(ghost_vertices_lp, "ghost_vertices_lp");
   LogicalPartition shared_vertices_lp = runtime->get_logical_partition(ctx, all_vertices_lr, shared_vertices_ip);
   runtime->attach_name(shared_vertices_lp, "shared_vertices_lp");
-  
+#endif
     
   runtime->issue_execution_fence(ctx);
   //Future f_end = runtime->get_current_time_in_microseconds(ctx);
@@ -421,7 +425,8 @@ void top_level_task(const Task *task,
         RegionRequirement(ghost_preimage_preimage_nrange_lp, 0/*projection ID*/,
                           READ_ONLY, EXCLUSIVE, all_cells_lr));
   test_launcher.region_requirements[5].add_field(FID_CELL_ID);
-  
+
+#if defined (HAVE_VERTEX)  
   test_launcher.add_region_requirement(
           RegionRequirement(owned_vertices_lp, 0/*projection ID*/,
                             READ_ONLY, EXCLUSIVE, all_vertices_lr));
@@ -437,7 +442,8 @@ void top_level_task(const Task *task,
         RegionRequirement(shared_vertices_lp, 0/*projection ID*/,
                           READ_ONLY, EXCLUSIVE, all_vertices_lr));
   test_launcher.region_requirements[8].add_field(FID_VERTEX_ID);
-  
+#endif
+
   FutureMap fm = runtime->execute_index_space(ctx, test_launcher);
   fm.wait_all_results(); 
   runtime->issue_execution_fence(ctx);
@@ -605,8 +611,14 @@ void test_task(const Task *task,
                 const std::vector<PhysicalRegion> &regions,
                 Context ctx, Runtime *runtime)
 {
+#if defined (HAVE_VERTEX)
   assert(regions.size() == 9);
   assert(task->regions.size() == 9);
+#else
+  assert(regions.size() == 6);
+  assert(task->regions.size() == 6);
+#endif
+  
 #if defined (OUTPUT_DP)  
   const int point = task->index_point.point_data[0];
   char hostname[1024];
@@ -662,7 +674,8 @@ void test_task(const Task *task,
                   task->regions[4].region.get_index_space());
   for (PointInDomainIterator<1> pir(domain_private); pir(); pir++)
     printf("private Partition %d, cell id %d\n", point, cells_id_private_acc[*pir]);
-  
+
+#if defined (HAVE_VERTEX)  
   printf("Owned vertices at point %d...\n", point);
   const AccessorROint vertices_id_owned_acc(regions[6], FID_VERTEX_ID);
   Domain domain_owned_vertices = runtime->get_index_space_domain(ctx,
@@ -683,6 +696,7 @@ void test_task(const Task *task,
                   task->regions[8].region.get_index_space());
   for (PointInDomainIterator<1> pir(domain_shared_vertices); pir(); pir++)
     printf("Shared vertices Partition %d, vertex id %d\n", point, vertices_id_shared_acc[*pir]);
+#endif
   
 #endif
 }
